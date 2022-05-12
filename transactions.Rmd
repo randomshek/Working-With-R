@@ -1,0 +1,271 @@
+---
+title: "Analysis on the Transactions Data"
+author: "Peter Shekoni"
+output: html_document
+date: '2022-04-15'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE}
+setwd("C:/Users/SAMSUNG/Documents")
+library(ggplot2)
+library(dplyr)
+
+transactions <- read.csv("transactions.csv", stringsAsFactors = T)
+
+summary(transactions)
+dim(transactions)
+```
+
+## SECTION 1
+### TASK 1.1
+
+Plot using ggplot with geom_histogram
+```{r}
+p <- ggplot(data = transactions, aes(x = model2))
+p <- p + geom_histogram(bins=25)
+p
+```
+The model2 is a normal data distribution with a large amount of data focused in the middle of the plot
+
+Statistics of **model2** 
+```{r}
+paste("model2")
+paste("mean = ", mean(transactions$model2))
+paste("median = ", median(transactions$model2))
+```
+The mean and the median look fairly similar and being close, which is suggestive that the distribution is symmetric.
+
+### TASK 1.2
+
+Plot using ggplot with geom_histogram
+```{r}
+p <- ggplot(data = transactions, aes(x = value))
+p <- p + geom_histogram(bins=25)
+p
+```
+The asymmetry of value is right skewed(positive) distribution with outliers on the right hand side of the plot
+
+Statistics of **value** 
+```{r}
+paste("value")
+paste("mean = ", mean(transactions$value))
+paste("median = ", median(transactions$value))
+```
+The mean and the median are not similar with a huge difference between them, which is suggestive that the distribution is asymmetric.
+
+### TASK 1.3
+Plot using ggplot with geom_boxplot
+```{r}
+p <- ggplot(data = transactions, aes(y = value, x = recipient))
+p <- p + geom_boxplot()
+p
+```
+
+```{r}
+summarise(group_by(transactions, recipient), 
+          means = mean(value),
+          stddev = sd(value))
+```
+The average of the means for the bill and self are significantly higher than the others. There is also a close similarity with the means and stdevs of purchase and transfer
+
+### TASK 1.4
+Relationship between time and value
+```{r}
+p <- ggplot(data = transactions, aes(x = time, y = value))
+p <- p + geom_point(size = 1, shape = 19, aes(color = device))
+p <- p + labs(title = "time and value", x = "time", y = "value", color = "device")
+p
+```
+
+```{r}
+cor(y = transactions$value, x = transactions$time, method = "spearman")
+```
+
+The scatterplot shows a weak positive trend and that evidence is backed up with the low correlation score of 0.1. This implies that time is not dependent on value. 
+
+### TASK 1.5
+Stacked barplots showing the frequencies of device against status
+```{r}
+p <- ggplot(data = transactions, aes(x = device, y = "frequency", fill = status))
+p <- p + geom_bar(width = 1, stat = "identity", position = "stack")
+p
+
+p1 <- ggplot(data = transactions, aes(x = status, y = "frequency", fill = device))
+p1 <- p1 + geom_bar(width = 1, stat = "identity", position = "fill")
+p1
+```
+* Mobile and tablet can be said to have slightly higher frequencies of devices with existing status
+* Higher rate of mobile devices with new status than in existing
+
+## SECTION 2
+### TASK 2.1
+Table of recipient values
+```{r}
+count <- table(transactions$recipient)
+count <- sort(count, decr = T)
+perc <- 100 * round(prop.table(count), 3)
+total <- cumsum(count) ; total
+cbind(Count = count, Perc = 100*round(prop.table(count),3), Total = cumsum(count))
+```
+* Purchase most common with 51.3%
+* Self least common with 8.7% 
+
+### TASK 2.2
+Tables showing dependence of recipient and status
+```{r}
+t <- xtabs(~ recipient + status, data = transactions)
+t
+prop.table(t, margin = 1)
+```
+* Purchase has a much lower proportion of existing status than average
+* Purchase also has a much higher proportion of new status than average
+* self recipient has the highest existing rate at 88%
+* The distribution of purchase between new and existing status are almost equal
+
+### TASK 2.3
+Tables of means of model2 broken down by status and device
+```{r}
+summarise(group_by(transactions, status), means = mean(model2))
+summarise(group_by(transactions, device), means = mean(model2))
+```
+* Existing status is higher than the new status for model2
+* Mobile device value is much lower than the average
+
+## SECTION 3
+### TASK 3.1
+Confidence intervals for means value of model1 and model 2
+```{r}
+t.test(transactions$model1, mu = mean(transactions$model1), conf.level = 0.95)
+t.test(transactions$model2, mu = mean(transactions$model2), conf.level = 0.95)
+```
+With 95% confidence:
+* mean of model1 lies in range 79.62703 to 80.32030
+* mean of model2 lies in range 81.68066 to 82.46201
+It is important to note that the interval ranges do not overlap so we can assume that the means are significantly different
+
+### TASK 3.2
+Paired test for difference in performance of model1 to the performance of model2
+n > 30 so parametric test is applicable
+ 
+```{r}
+t.test(transactions$model2, transactions$model1, sig.level = 0.05,
+       mu = 0, paired = T, alternative = "two.sided")
+```
+p-value is lower than the significance level therefore we can assume that the null hypothesis is wrong because the chances of the null hypothesis being correct is minuscule
+
+Checking if difference in performance of model1 to the performance of model2 is greater than 2
+```{r}
+t.test(transactions$model2, transactions$model1, sig.level = 0.05,
+       mu = 2, paired = T, alternative = "greater")
+```
+p-value = 0.30 > 0.01 so we do not have statistical evidence to reject the null hypothesis, that the difference is not greater than 2 
+
+### TASK 3.3
+Non parametric test
+
+```{r}
+m1 <- transactions$model2[transactions$status == "Existing"]
+m2 <- transactions$model2[transactions$status == "New"]
+
+wilcox.test(m1, m2, paired = F,
+            mu = 0, exact = FALSE, alternative = "two.sided", sig.level = 0.01)
+```
+p-value is small which indicates a strong evidence to accept the alternative that there is a significant reduced performance of model2 on New recipients when compared to Existing recipients and reject the null hypothesis
+
+```{r}
+m3 <- transactions$model2[transactions$device == "PC"]
+m4 <- transactions$model2[transactions$device == "tablet"]
+
+wilcox.test(m3, m4, paired = F,
+            mu = 0, exact = FALSE, alternative = "two.sided", sig.level = 0.01)
+```
+p-value is greater than the significance level which indicates evidence to accept the null hypothesis that there is no significant difference in performance of model2 for PC device compared to tablet device
+
+### TASK 3.4
+Checking if there is a difference between different recipients for model2 
+
+```{r}
+anova <- aov(model2 ~ recipient, data = transactions)
+summary(anova)
+plot(anova, 1)
+
+res <- data.frame(residuals = anova$residuals)
+p <- ggplot(res, aes(sample = residuals)) 
+p <- p + stat_qq()
+p <- p + stat_qq_line()
+p <- p + labs(title = "Q-Q plot for the Anova residuals")
+p
+
+shapiro.test(anova$residuals)
+
+TukeyHSD(anova, sig.level = 0.05)
+```
+
+* The plot shows that we have an even spread of residuals, which is further backed up with the observations following the straight line on the QQ plot
+* Tukey identifies differences between all levels, with transfer-self the most different
+* The Shapiro-Wilk normality test suggests the normality of residuals
+
+## SECTION 4
+### TASK 4.1
+Calculating the standard deviation of model2
+```{r}
+paste("model2")
+paste("stdev = ", sd(transactions$model2))
+```
+
+### TASK 4.2
+Calculating the minimum sample size for a two sample type test
+```{r}
+# Calculating the standard deviation of model2
+sd <- sd(transactions$model2)
+
+num = ceiling(power.t.test(power = 0.9,
+                           delta = 2,
+                           sd = sd,
+                           sig.level = 0.05,
+                           type = "two.sample",
+                           alternative = "two.sided")$n)
+
+paste("The minimum sample size required when power = 0.9 is", num)
+
+num1 = ceiling(power.t.test(power = 0.99,
+                           delta = 2,
+                           sd = sd,
+                           sig.level = 0.01,
+                           type = "two.sample",
+                           alternative = "two.sided")$n)
+
+paste("The minimum sample size required when power = 0.99 is", num1)
+```
+### TASK 4.3
+```{r}
+num2 <- num
+
+transactionsSample <- slice_sample(transactions, n = num2)
+
+t <- rbind(all = prop.table(table(transactions$recipient)), Random = prop.table(table(transactionsSample$recipient)))
+
+round(t,2)
+```
+The random sample changes each time we run the code. We get different proportions in the random sample because we are creating a small sample
+
+### TASK 4.4
+```{r}
+set.seed(123)
+
+num2 <- num
+
+transactionsGrouped <- group_by(transactions, recipient)
+N <- nrow(transactions)
+
+transactionsSample2 <- slice_sample(transactionsGrouped, prop = num2/N)
+
+t2 <- rbind(all = prop.table(table(transactions$recipient)), Stratified = prop.table(table(transactionsSample2$recipient)))
+
+round(t2,2)
+```
+To make it reproducible to get the same results each time, we set the seed of the random number so that each time we run the code we see the same random numbers been drawn
